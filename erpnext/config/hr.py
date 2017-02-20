@@ -146,16 +146,47 @@ def get_data():
 					"name": "Appraisal Template",
 					"description": _("Template for performance appraisals.")
 				},
+				{
+					"type": "page",
+					"name": "team-updates",
+					"label": _("Team Updates")
+				},
 			]
 		},
 
 		{
-			"label": _("Tools"),
-			"icon": "fa fa-wrench",
+			"label": _("Training"),
 			"items": [
-
+				{
+					"type": "doctype",
+					"name": "Training Event"
+				},
+				{
+					"type": "doctype",
+					"name": "Training Result"
+				},
+				{
+					"type": "doctype",
+					"name": "Training Feedback"
+				},
 			]
 		},
+
+		{
+			"label": _("Fleet Management"),
+			"items": [
+				{
+					"type": "doctype",
+					"name": "Vehicle"
+				},
+				{
+					"type": "doctype",
+					"name": "Vehicle Log"
+				},
+			]
+		},
+
+
 		{
 			"label": _("Setup"),
 			"icon": "fa fa-cog",
@@ -221,7 +252,7 @@ def get_data():
 				{
 					"type": "report",
 					"is_query_report": True,
-					"name": "Monthly Salary Register",
+					"name": "Salary Register",
 					"doctype": "Salary Slip"
 				},
 				{
@@ -230,7 +261,33 @@ def get_data():
 					"name": "Monthly Attendance Sheet",
 					"doctype": "Attendance"
 				},
+				{
+					"type": "report",
+					"is_query_report": True,
+					"name": "Vehicle Expenses",
+					"doctype": "Vehicle"
+				},
 
+			]
+		},
+		{
+			"label": _("Employee Loan Management"),
+			"icon": "icon-list",
+			"items": [
+				{
+					"type": "doctype",
+					"name": "Loan Type",
+					"description": _("Define various loan types")
+				},
+				{
+					"type": "doctype",
+					"name": "Employee Loan Application",
+					"description": _("Employee Loan Application")
+				},
+				{
+					"type": "doctype",
+					"name": "Employee Loan"
+				},
 			]
 		},
 		{

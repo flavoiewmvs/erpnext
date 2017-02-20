@@ -6,18 +6,21 @@ import frappe
 import unittest
 import erpnext
 from frappe.utils.make_random import get_random
-from frappe.utils import nowdate, add_days, add_years
+from frappe.utils import nowdate, add_days, add_years, getdate
 from erpnext.hr.doctype.salary_structure.salary_structure import make_salary_slip
-from erpnext.hr.doctype.salary_slip.test_salary_slip import make_earning_salary_component, make_deduction_salary_component
+from erpnext.hr.doctype.salary_slip.test_salary_slip \
+	import make_earning_salary_component, make_deduction_salary_component
+
+test_dependencies = ["Fiscal Year"]
 
 class TestSalaryStructure(unittest.TestCase):
-	def test_setup(self):
+	def setUp(self):
 		self.make_holiday_list()
 		frappe.db.set_value("Company", erpnext.get_default_company(), "default_holiday_list", "Salary Structure Test Holiday List")
-		make_earning_salary_component(["Basic Salary", "Allowance", "HRA"])
+		make_earning_salary_component(["Basic Salary", "Special Allowance", "HRA"])
 		make_deduction_salary_component(["Professional Tax", "TDS"])
-		self.make_employee("test_employee@salary.com")
-		self.make_employee("test_employee_2@salary.com")
+		make_employee("test_employee@salary.com")
+		make_employee("test_employee_2@salary.com")
 		
 	def make_holiday_list(self):
 		if not frappe.db.get_value("Holiday List", "Salary Structure Test Holiday List"):
@@ -30,37 +33,6 @@ class TestSalaryStructure(unittest.TestCase):
 			}).insert()	
 			holiday_list.get_weekly_off_dates()
 			holiday_list.save()
-	
-	def make_employee(self, user):
-		if not frappe.db.get_value("User", user):
-			frappe.get_doc({
-				"doctype": "User",
-				"email": user,
-				"first_name": user,
-				"new_password": "password",
-				"user_roles": [{"doctype": "UserRole", "role": "Employee"}]
-			}).insert()
-			
-
-		if not frappe.db.get_value("Employee", {"user_id": user}):
-			emp = frappe.get_doc({
-				"doctype": "Employee",
-				"naming_series": "EMP-",
-				"employee_name": user,
-				"company": erpnext.get_default_company(),
-				"user_id": user,
-				"date_of_birth": "1990-05-08",
-				"date_of_joining": "2013-01-01",
-				"relieving_date": "",
-				"department": frappe.get_all("Department", fields="name")[0].name,
-				"gender": "Female",
-				"company_email": user,
-				"status": "Active",
-				"employment_type": "Intern"
-			}).insert()
-			return emp.name
-		else:
-			return frappe.get_value("Employee", {"employee_name":user}, "name")
 		
 	def test_amount_totals(self):
 		sal_slip = frappe.get_value("Salary Slip", {"employee_name":"test_employee@salary.com"})
@@ -73,6 +45,36 @@ class TestSalaryStructure(unittest.TestCase):
 			self.assertEquals(sal_slip.get("total_deduction"), 7500)
 			self.assertEquals(sal_slip.get("net_pay"), 7500)
 			
+def make_employee(user):
+	if not frappe.db.get_value("User", user):
+		frappe.get_doc({
+			"doctype": "User",
+			"email": user,
+			"first_name": user,
+			"new_password": "password",
+			"user_roles": [{"doctype": "UserRole", "role": "Employee"}]
+		}).insert()
+		
+
+	if not frappe.db.get_value("Employee", {"user_id": user}):
+		emp = frappe.get_doc({
+			"doctype": "Employee",
+			"naming_series": "EMP-",
+			"employee_name": user,
+			"company": erpnext.get_default_company(),
+			"user_id": user,
+			"date_of_birth": "1990-05-08",
+			"date_of_joining": "2013-01-01",
+			"relieving_date": "",
+			"department": frappe.get_all("Department", fields="name")[0].name,
+			"gender": "Female",
+			"company_email": user,
+			"status": "Active",
+			"employment_type": "Intern"
+		}).insert()
+		return emp.name
+	else:
+		return frappe.get_value("Employee", {"employee_name":user}, "name")			
 		
 def make_salary_slip_from_salary_structure(employee):
 	sal_struct = make_salary_structure('Salary Structure Sample')
@@ -137,8 +139,8 @@ def get_earnings_component():
 					"idx": 3
 				},
 				{
-					"salary_component": 'Allowance',
-					"abbr":'A',
+					"salary_component": 'Special Allowance',
+					"abbr":'SA',
 					"condition": 'H < 10000',
 					"formula": 'BS*.5',
 					"idx": 4

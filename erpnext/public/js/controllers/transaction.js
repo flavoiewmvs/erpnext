@@ -349,7 +349,7 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 						me.frm.set_value("letter_head", company_doc.default_letter_head);
 					}
 				}
-				if (company_doc.default_terms && me.frm.doc.doctype != "Purchase Invoice") {
+				if (company_doc.default_terms && me.frm.doc.doctype != "Purchase Invoice" && frappe.meta.has_field(me.frm.doc.doctype, "tc_name")) {
 					me.frm.set_value("tc_name", company_doc.default_terms);
 				}
 
@@ -902,13 +902,17 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 	get_terms: function() {
 		var me = this;
 		if(this.frm.doc.tc_name) {
-			return this.frm.call({
-				method: "frappe.client.get_value",
+			return frappe.call({
+				method: 'erpnext.setup.doctype.terms_and_conditions.terms_and_conditions.get_terms_and_conditions',
 				args: {
-					doctype: "Terms and Conditions",
-					fieldname: "terms",
-					filters: { name: this.frm.doc.tc_name },
+					template_name: this.frm.doc.tc_name,
+					doc: this.frm.doc
 				},
+				callback: function(r) {
+					if(!r.exc) {
+						me.frm.set_value("terms", r.message);
+					}
+				}
 			});
 		}
 	},

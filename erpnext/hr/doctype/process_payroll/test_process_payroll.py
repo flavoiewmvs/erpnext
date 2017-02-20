@@ -26,10 +26,10 @@ class TestProcessPayroll(unittest.TestCase):
 			process_payroll.payment_account = payment_account
 			process_payroll.posting_date = nowdate()
 			process_payroll.payroll_frequency = "Monthly"
-			process_payroll.create_sal_slip()
-			process_payroll.submit_salary_slip()
+			process_payroll.create_salary_slips()
+			process_payroll.submit_salary_slips()
 			if process_payroll.get_sal_slip_list(ss_status = 1):
-				r = process_payroll.make_journal_entry(reference_number=random_string(10),reference_date=nowdate())
+				r = process_payroll.make_payment_entry()
 	
 
 def get_salary_component_account(sal_comp):

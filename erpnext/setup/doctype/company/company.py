@@ -50,7 +50,7 @@ class Company(Document):
 	def validate_default_accounts(self):
 		for field in ["default_bank_account", "default_cash_account", "default_receivable_account", "default_payable_account",
 			"default_expense_account", "default_income_account", "stock_received_but_not_billed",
-			"stock_adjustment_account", "expenses_included_in_valuation"]:
+			"stock_adjustment_account", "expenses_included_in_valuation", "default_payroll_payable_account"]:
 				if self.get(field):
 					for_company = frappe.db.get_value("Account", self.get(field), "company")
 					if for_company != self.name:
@@ -78,6 +78,8 @@ class Company(Document):
 
 		if not frappe.local.flags.ignore_chart_of_accounts:
 			self.set_default_accounts()
+			if self.default_cash_account:
+				self.mode_of_payment()
 
 		if self.default_currency:
 			frappe.db.set_value("Currency", self.default_currency, "enabled", 1)
@@ -151,6 +153,8 @@ class Company(Document):
 			self.db_set("default_income_account", frappe.db.get_value("Account",
 				{"account_name": _("Sales"), "company": self.name}))
 
+		if not self.default_payable_account:
+			self.db_set("default_payable_account", self.default_payable_account)
 
 	def _set_default_account(self, fieldname, account_type):
 		if self.get(fieldname):
@@ -161,6 +165,16 @@ class Company(Document):
 
 		if account:
 			self.db_set(fieldname, account)
+
+	def mode_of_payment(self):
+		cash = frappe.db.get_value('Mode of Payment', {'type': 'Cash'}, 'name')
+		if cash and not frappe.db.get_value('Mode of Payment Account', {'company': self.name}):
+			mode_of_payment = frappe.get_doc('Mode of Payment', cash)
+			mode_of_payment.append('accounts', {
+				'company': self.name,
+				'default_account': self.default_cash_account
+			})
+			mode_of_payment.save(ignore_permissions=True)
 
 	def create_default_cost_center(self):
 		cc_list = [

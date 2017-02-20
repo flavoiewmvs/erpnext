@@ -109,22 +109,27 @@ def apply_pricing_rule(args):
 
 	item_list = args.get("items")
 	args.pop("items")
+	
+	set_serial_nos_based_on_fifo = frappe.db.get_single_value("Stock Settings", 
+		"automatically_set_serial_nos_based_on_fifo")
 
 	for item in item_list:
 		args_copy = copy.deepcopy(args)
 		args_copy.update(item)
 		out.append(get_pricing_rule_for_item(args_copy))
-		out.append(get_serial_no_for_item(args_copy))
+		if set_serial_nos_based_on_fifo:
+			out.append(get_serial_no_for_item(args_copy))
 	return out
 	
 def get_serial_no_for_item(args):
 	from erpnext.stock.get_item_details import get_serial_no
+
 	item_details = frappe._dict({
 		"doctype": args.doctype,
 		"name": args.name,
 		"serial_no": args.serial_no
 	})
-	if args.get("parenttype") in ("Sales Invoice", "Delivery Note"):
+	if args.get("parenttype") in ("Sales Invoice", "Delivery Note") and args.qty > 0:
 		item_details.serial_no = get_serial_no(args)
 	return item_details
 
@@ -138,6 +143,8 @@ def get_pricing_rule_for_item(args):
 	})
 	
 	if args.ignore_pricing_rule or not args.item_code:
+		if frappe.db.exists(args.doctype, args.name) and args.get("pricing_rule"):
+			item_details = remove_pricing_rule(args, item_details)
 		return item_details
 
 	if not (args.item_group and args.brand):
@@ -178,9 +185,16 @@ def get_pricing_rule_for_item(args):
 		else:
 			item_details.discount_percentage = pricing_rule.discount_percentage
 	elif args.get('pricing_rule'):
-		if frappe.db.get_value('Pricing Rule', args.get('pricing_rule'), 'price_or_discount') == 'Discount Percentage':
-			item_details.discount_percentage = 0.0
+		item_details = remove_pricing_rule(args, item_details)
 
+	return item_details
+
+def remove_pricing_rule(args, item_details):
+	pricing_rule = frappe.db.get_value('Pricing Rule', args.get('pricing_rule'), ['price_or_discount', 'margin_type'], as_dict=1)
+	if pricing_rule and pricing_rule.price_or_discount == 'Discount Percentage':
+		item_details.discount_percentage = 0.0
+
+	if pricing_rule and pricing_rule.margin_type in ['Percentage', 'Amount']:
 		item_details.margin_rate_or_amount = 0.0
 		item_details.margin_type = None
 

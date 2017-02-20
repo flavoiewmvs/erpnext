@@ -16,6 +16,7 @@ class LeaveDayBlockedError(frappe.ValidationError): pass
 class OverlapError(frappe.ValidationError): pass
 class InvalidLeaveApproverError(frappe.ValidationError): pass
 class LeaveApproverIdentityError(frappe.ValidationError): pass
+class AttendanceAlreadyMarkedError(frappe.ValidationError): pass
 
 from frappe.model.document import Document
 class LeaveApplication(Document):
@@ -24,7 +25,7 @@ class LeaveApplication(Document):
 
 	def validate(self):
 		if not getattr(self, "__islocal", None) and frappe.db.exists(self.doctype, self.name):
-			self.previous_doc = frappe.db.get_value(self.doctype, self.name, "*", as_dict=True)
+			self.previous_doc = frappe.get_value(self.doctype, self.name, "leave_approver", as_dict=True)
 		else:
 			self.previous_doc = None
 
@@ -45,14 +46,10 @@ class LeaveApplication(Document):
 				self.status == "Open" and self.previous_doc.leave_approver != self.leave_approver):
 			# notify leave approver about creation
 			self.notify_leave_approver()
-		elif self.previous_doc and \
-				self.previous_doc.status == "Open" and self.status == "Rejected":
-			# notify employee about rejection
-			self.notify_employee(self.status)
 
 	def on_submit(self):
-		if self.status != "Approved":
-			frappe.throw(_("Only Leave Applications with status 'Approved' can be submitted"))
+		if self.status == "Open":
+			frappe.throw(_("Only Leave Applications with status 'Approved' and 'Rejected' can be submitted"))
 
 		self.validate_back_dated_application()
 
@@ -100,16 +97,16 @@ class LeaveApplication(Document):
 	def validate_salary_processed_days(self):
 		if not frappe.db.get_value("Leave Type", self.leave_type, "is_lwp"):
 			return
-			
+
 		last_processed_pay_slip = frappe.db.sql("""
 			select start_date, end_date from `tabSalary Slip`
 			where docstatus = 1 and employee = %s
-			and ((%s between start_date and end_date) or (%s between start_date and end_date)) 
+			and ((%s between start_date and end_date) or (%s between start_date and end_date))
 			order by modified desc limit 1
 		""",(self.employee, self.to_date, self.from_date))
 
 		if last_processed_pay_slip:
-			frappe.throw(_("Salary already processed for period between {0} and {1}, Leave application period cannot be between this date range.").format(formatdate(last_processed_pay_slip[0][0]), 
+			frappe.throw(_("Salary already processed for period between {0} and {1}, Leave application period cannot be between this date range.").format(formatdate(last_processed_pay_slip[0][0]),
 				formatdate(last_processed_pay_slip[0][1])))
 
 
@@ -213,13 +210,14 @@ class LeaveApplication(Document):
 		elif self.docstatus==1 and len(leave_approvers) and self.leave_approver != frappe.session.user:
 			frappe.throw(_("Only the selected Leave Approver can submit this Leave Application"),
 				LeaveApproverIdentityError)
-	
+
 	def validate_attendance(self):
-		attendance = frappe.db.sql("""select name from `tabAttendance` where employee = %s and (att_date between %s and %s)
-					and docstatus = 1""",
+		attendance = frappe.db.sql("""select name from `tabAttendance` where employee = %s and (attendance_date between %s and %s)
+					and status = "Present" and docstatus = 1""",
 			(self.employee, self.from_date, self.to_date))
 		if attendance:
-			frappe.throw(_("Attendance for employee {0} is already marked for this day").format(self.employee))		
+			frappe.throw(_("Attendance for employee {0} is already marked for this day").format(self.employee),
+				AttendanceAlreadyMarkedError)
 
 	def notify_employee(self, status):
 		employee = frappe.get_doc("Employee", self.employee)
@@ -232,13 +230,18 @@ class LeaveApplication(Document):
 			else:
 				name = self.name
 
-			return (_("Leave Application") + ": %s - %s") % (name, _(status))
+			message = "Leave Application: {name}".format(name=name)+"<br>"
+			message += "Leave Type: {leave_type}".format(leave_type=self.leave_type)+"<br>"
+			message += "From Date: {from_date}".format(from_date=self.from_date)+"<br>"
+			message += "To Date: {to_date}".format(to_date=self.to_date)+"<br>"
+			message += "Status: {status}".format(status=_(status))
+			return message
 
 		self.notify({
 			# for post in messages
 			"message": _get_message(url=True),
 			"message_to": employee.user_id,
-			"subject": _get_message(),
+			"subject": (_("Leave Application") + ": %s - %s") % (self.name, _(status))
 		})
 
 	def notify_leave_approver(self):
@@ -250,8 +253,12 @@ class LeaveApplication(Document):
 			if url:
 				name = get_link_to_form(self.doctype, self.name)
 				employee_name = get_link_to_form("Employee", self.employee, label=employee_name)
-
-			return (_("New Leave Application") + ": %s - " + _("Employee") + ": %s") % (name, employee_name)
+			message = (_("Leave Application") + ": %s") % (name)+"<br>"
+			message += (_("Employee") + ": %s") % (employee_name)+"<br>"
+			message += (_("Leave Type") + ": %s") % (self.leave_type)+"<br>"
+			message += (_("From Date") + ": %s") % (self.from_date)+"<br>"
+			message += (_("To Date") + ": %s") % (self.to_date)
+			return message
 
 		self.notify({
 			# for post in messages
@@ -259,7 +266,7 @@ class LeaveApplication(Document):
 			"message_to": self.leave_approver,
 
 			# for email
-			"subject": _get_message()
+			"subject": (_("New Leave Application") + ": %s - " + _("Employee") + ": %s") % (self.name, cstr(employee.employee_name))
 		})
 
 	def notify(self, args):
@@ -267,6 +274,7 @@ class LeaveApplication(Document):
 		from frappe.desk.page.chat.chat import post
 		post(**{"txt": args.message, "contact": args.message_to, "subject": args.subject,
 			"notify": cint(self.follow_via_email)})
+
 
 @frappe.whitelist()
 def get_approvers(doctype, txt, searchfield, start, page_len, filters):
